@@ -42,10 +42,23 @@
         "configuration": "./language/ocaml.json"
       }
     ],
+    "commands": [
+			{
+				"command": "languageServerExample.startStreaming",
+				"title": "Start Stream Logs into languageServerExample.port"
+			}
+		],
     "configuration": {
       "type": "object",
       "title": "Merlin configuration",
-      "properties": {}
+      "properties": {
+        "languageServerExample.port": {
+					"type": "number",
+					"default": 7000,
+					"scope": "window",
+					"description": "The WebSocket port to stream LSP log data into."
+				}
+      }
     },
     "grammars": [
       {
@@ -67,6 +80,9 @@
     "postinstall": "cd client && npm install && cd ..",
     "test": "sh ./scripts/e2e.sh",
     "package": "vsce package"
+  },
+  "dependencies": {
+    "ws": "^6.0.0"
   },
   "devDependencies": {
     "@types/mocha": "^5.2.0",

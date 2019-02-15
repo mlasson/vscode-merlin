@@ -6,7 +6,9 @@
 import * as fs from "fs";
 import * as path from "path";
 import {promisify} from "util";
-import { workspace, ExtensionContext } from "vscode";
+import { workspace, ExtensionContext, TextEditorLineNumbersStyle } from "vscode";
+import { commands, OutputChannel } from 'vscode';
+import * as WebSocket from 'ws';
 
 let exists = promisify(fs.exists);
 
@@ -45,6 +47,13 @@ async function getCommandForWorkspace() {
 export async function activate(context: ExtensionContext) {
   let {command, args} = await getCommandForWorkspace();
 
+  const socketPort = workspace.getConfiguration('languageServerExample').get('port', 7000);
+  let socket: WebSocket | null = null;
+
+  commands.registerCommand('languageServerExample.startStreaming', () => {
+    socket = new WebSocket(`ws://localhost:${socketPort}`);
+  });
+
   // If the extension is launched in debug mode then the debug server options are used
   // Otherwise the run options are used
   let serverOptions: ServerOptions = {
@@ -54,8 +63,7 @@ export async function activate(context: ExtensionContext) {
       options: {
         env: {
           ...process.env,
-          OCAMLRUNPARAM: 'b',
-          MERLIN_LOG: "-"
+          MERLIN_LSP_LOG: "-"
         }
       }
     },
@@ -66,11 +74,39 @@ export async function activate(context: ExtensionContext) {
       options: {
         env: {
           ...process.env,
-          OCAMLRUNPARAM: 'b',
-          MERLIN_LOG: "-"
+          MERLIN_LSP_LOG: "-"
         }
       }
     }
+  };
+
+  let log = '';
+
+  function send (value : string) {
+    log += value;
+    const lines = log.split("\r\n");
+    const last = lines[lines.length - 1];
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      for (let line of lines.slice(0, lines.length - 1)) {
+        socket.send(" ".repeat(21) + line + "\r\n");
+      }
+    }
+    log = last;
+  }
+
+  const websocketOutputChannel: OutputChannel = {
+    name: 'websocket',
+    // Only append the logs but send them later
+    append(value: string) {
+      send(value);
+    },
+    appendLine(value: string) {
+      send(value);
+    },
+    clear() {},
+    show() {},
+    hide() {},
+    dispose() {}
   };
 
   // Options to control the language client
@@ -83,7 +119,8 @@ export async function activate(context: ExtensionContext) {
     synchronize: {
       // Notify the server about file changes to '.clientrc files contained in the workspace
       fileEvents: workspace.createFileSystemWatcher("**/.clientrc")
-    }
+    },
+    outputChannel: websocketOutputChannel
   };
 
   // Create the language client and start the client.
